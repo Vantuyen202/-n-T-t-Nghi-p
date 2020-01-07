@@ -87,7 +87,7 @@ int Alarm1=0;
 // float t=0.0,h=0.0;
  unsigned short cnt=0;
  short temp_ll,temp_hh,humi_ll,humi_hh;
- int temp_l = -2, temp_h = 51, humi_l=-2,humi_h=101 ;
+ int temp_l = -2, temp_h = 101, humi_l=-2,humi_h=101 ;
  unsigned char str1[8]="0";
  unsigned char str2[8]="0";
  unsigned char str3[8]="0";
@@ -101,6 +101,7 @@ char txt4[]="00.0";
 char lcd=0;
 int sms_status=0;
 int sms_status_a=0;
+int sms_status_b=0;
 
 
 char sms[160];
@@ -175,6 +176,7 @@ void main(void)
     Lcd_Cmd(_LCD_CURSOR_OFF);
     Delay_ms(2000); // doi khoi dong module sim
     GSM_Begin();
+    Send_Status();
     Lcd_Cmd(_LCD_CLEAR);
     while(1)
     {
@@ -207,6 +209,7 @@ void main(void)
      if(Alarm1==1){
       Lcd_Out(2,15,"AL: ON");
       }
+      /////////////////IN1_Alarm///////////////////////
       if(Digital_IN1==1)
       {
         RA1_bit=1;
@@ -220,19 +223,22 @@ void main(void)
         RA1_bit=0;
         sms_status_a=0;
         }
-        ////////////////////////////////////
+        ////////////////////IN2_alarm////////////////
         if(Digital_IN2==0)
       {
-        if(sms_status_a==0){
+        if(sms_status_b==0){
+        Relay1=1;
         Send_Status3();
+        delay_ms(3000);
+        Relay1=0;
        }
-        sms_status_a=1;
+        sms_status_b=1;
         }
        if(Digital_IN2==1)
       {
-        sms_status_a=0;
+        sms_status_b=0;
         }
-        ////////////////////////////////
+        ///////////////////Temp_humi_alarm/////////////
       if(EEPROM_Read(0x11)>=EEPROM_Read(0x00) && Alarm1==1 && sms_status==0)    //TEMP >=TEMP_HH
       {
        Send_Status2();
@@ -625,9 +631,10 @@ unsigned AlarmMessage(char* Message2){
   return strlen(Message2);
 }
 unsigned Al_Message(char* Message3){
+
+  Message3[0] = '\0';
   strcat(Message3, "Status_INPUT:");
   strcat(Message3, "\r\n");
-  Message3[0] = '\0';
   if (Button(&PORTA, 3, 100, 1))  // Digital_IN1
   { strcat(Message3, " IN1 - OPEN"); }
   else
@@ -1054,7 +1061,7 @@ if(lcd==1){
      temp_ll--;
      if(temp_ll==temp_l)
      {
-      temp_ll=50;
+      temp_ll=100;
      }
      EEPROM_Write(0x01,temp_ll);
     }
@@ -1074,7 +1081,7 @@ if(lcd==1){
      humi_hh++;
      if(humi_hh==humi_h)
      {
-      humi_hh=100;
+      humi_hh=0;
      }
      EEPROM_Write(0x02,humi_hh);
 
