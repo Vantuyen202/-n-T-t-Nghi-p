@@ -51,29 +51,58 @@ void GSM_Delete_All_Msg();
 unsigned ComposeMessage(char*Message);
 void Send_Status();
 void checksms();
-
+void status_lcd(void);
 void Display_Init();
 void sms1(unsigned);
 void processValue(unsigned , unsigned );
 char AM2302_Read(unsigned *, unsigned *);
 void degreeChar(char , char );
-
+unsigned settingMessage(char* Message1);
+unsigned AlarmMessage(char* Message2);
+unsigned Al_Message(char* Message3);
+void Send_Status1();
+void Send_Status2();
+void Send_Status3();
 void re_485();
 void temp();
+void Alarm();
 
+int t2=0,t3=0,h2=0,h3=0;
 int cm=0;
 int value=0;
-char txt4[]="00.0";
-char txt1[]="00.0";
-char txt2[]="00.0";
-char txt3[]="00.0";
+int value_t=0,value_h=0;
 unsigned char dat[10];
+
+char str_val[160]; // pointer to the first character of a token
+int M1, M2; // values extracted from string
+char M3;
 
 char AM2302_Data[5] = {0, 0, 0, 0, 0};
 unsigned humidity = 0, temperature = 0;
 const char degree[] = {14,10,14,0,0,0,0,0};
+int cnt1=0;
+int cnt2=0;
+int cnt3=0;
+int Alarm1=0;
+// float t=0.0,h=0.0;
+ unsigned short cnt=0;
+ short temp_ll,temp_hh,humi_ll,humi_hh;
+ int temp_l = -2, temp_h = 51, humi_l=-2,humi_h=101 ;
+ unsigned char str1[8]="0";
+ unsigned char str2[8]="0";
+ unsigned char str3[8]="0";
+ unsigned char str4[8]="0";
 
-unsigned short cnt;
+
+char txt1[]="00.0";
+char txt2[]="00.0";
+char txt3[]="00.0";
+char txt4[]="00.0";
+char lcd=0;
+int sms_status=0;
+int sms_status_a=0;
+
+
 char sms[160];
 char buff[160];
 char status_flag = 0;
@@ -96,9 +125,12 @@ void Intuart(){
      TMR1H         = 0x3C;
      TMR1L         = 0xB0;
      TMR1IE_bit         = 1;
-     cnt =   0;
+     cnt1 =   0;
+     cnt2 =   0;
+     cnt3 =   0;
      INTCON         = 0xC0;
 }
+
 void main(void)
 {
     int is_msg_arrived;
@@ -107,7 +139,7 @@ void main(void)
     ANSELB=0;
     ANSELC=0;
     buffer_pointer = 0;
-    memset(message_received, 0, 60);
+    memset(message_received, 0, 80);
 
     Relay1 = 0;
     Relay2 = 0;
@@ -118,9 +150,12 @@ void main(void)
     Digital_IN1_Direction = 1;
     Digital_IN2_Direction = 1;
 
-    Digital_IN1=0;
-    Digital_IN2=0;
-    
+    Digital_IN1=1;
+    Digital_IN2=1;
+
+    TRISA1_bit=0;
+    RA1_bit=0;
+
     UART1_Init(9600);
     UARt2_Init(14400);
     Delay_ms(100);
@@ -138,26 +173,125 @@ void main(void)
     Display_Init();
     Lcd_Cmd(_LCD_CLEAR);
     Lcd_Cmd(_LCD_CURSOR_OFF);
-    Delay_ms(12000); // doi khoi dong module sim
+    Delay_ms(2000); // doi khoi dong module sim
     GSM_Begin();
     Lcd_Cmd(_LCD_CLEAR);
     while(1)
     {
-
-             if(cnt>=30){
-              temp();
-              cnt=0;
-             }
-              re_485();
-              RS485Master_Send(dat,3,1);
-             if(status_flag==1){
-             is_msg_arrived = GSM_Wait_for_Msg();
+    status_lcd();
+  if(lcd==0){
+    re_485();
+    RS485Master_Send(dat,3,1);
+  if(cnt1>=20)
+   {
+  if (AM2302_Read(&humidity, &temperature) == 0){                 // Display AM2302_Read sensor values via LCD
+       processValue(humidity, temperature);                       // Display AM2302_Read sensor values via LCD
+        }
+    else
+    {
+    Lcd_Out(1,1,"Sensor1 NC    ");
+    Lcd_Out(2,1,"              ");
+    }
+    cnt1=0;
+   }
+    ////////////cai dat alarm///////////////
+     if (Button(&PORTB, 1, 100, 0)&&Alarm1==0) {
+       Alarm1=1;
+       }
+     if (Button(&PORTB, 1, 100, 0)&&Alarm1==1) {
+       Alarm1=0;
+       }
+     if(Alarm1==0){
+      Lcd_Out(2,15,"AL:OFF");
+      }
+     if(Alarm1==1){
+      Lcd_Out(2,15,"AL: ON");
+      }
+      if(Digital_IN1==1)
+      {
+        RA1_bit=1;
+        if(sms_status_a==0){
+        Send_Status3();
+       }
+        sms_status_a=1;
+        }
+       if(Digital_IN1==0)
+      {
+        RA1_bit=0;
+        sms_status_a=0;
+        }
+        ////////////////////////////////////
+        if(Digital_IN2==0)
+      {
+        if(sms_status_a==0){
+        Send_Status3();
+       }
+        sms_status_a=1;
+        }
+       if(Digital_IN2==1)
+      {
+        sms_status_a=0;
+        }
+        ////////////////////////////////
+      if(EEPROM_Read(0x11)>=EEPROM_Read(0x00) && Alarm1==1 && sms_status==0)    //TEMP >=TEMP_HH
+      {
+       Send_Status2();
+       if(Relay1==1){
+       delay_ms(3000);
+       Relay1=0;}
+       sms_status=1;
+      }
+      if(EEPROM_Read(0x11)<=EEPROM_Read(0x01) && Alarm1==1&& sms_status==0)       //TEMP <=TEMP_HH
+      {
+       Send_Status2();
+        if(Relay1==1){
+       delay_ms(3000);
+       Relay1=0;}
+       sms_status=1;
+      }
+      if(EEPROM_Read(0x10)>=EEPROM_Read(0x02) && Alarm1==1&& sms_status==0)      // HUMI>=HUMI_HH
+      {
+       Send_Status2();
+        if(Relay1==1){
+       delay_ms(3000);
+       Relay1=0;}
+       if(Relay2==0){
+       Relay2=1;
+       }
+       sms_status=1;
+      }
+      if(EEPROM_Read(0x10)<=EEPROM_Read(0x03) && Alarm1==1&& sms_status==0)    //   HUMI<=HUMI_HH
+      {
+       Send_Status2();
+        if(Relay2==1){
+       delay_ms(3000);
+       Relay1=0;}
+       if(Relay2==1){
+       Relay2=0;
+       }
+       sms_status=1;
+      }
+      if(Alarm1==0&& sms_status==1)
+      {
+       Relay1=0;
+       sms_status=0;
+      }
+      if(cnt2>=6000) //300s
+      {
+      if(sms_status==1)
+      {
+       sms_status=0;
+       }
+       cnt2=0;
+      }
+      if(status_flag==1){
+      is_msg_arrived = GSM_Wait_for_Msg();
              if(is_msg_arrived== true)
-             {   Lcd_Out(1,16,"msg:1");
+             {   Lcd_Out(1,16,"MSG:1");
                  delay_ms(1000);
                  Lcd_Cmd(_LCD_CLEAR);
                  Lcd_Out(1,1,"New message");
-                 Delay_ms(1000);
+                 Delay_ms(500);
                  Lcd_Cmd(_LCD_CLEAR);
                  GSM_Msg_Read(position);
                  Delay_ms(2000);
@@ -172,47 +306,43 @@ void main(void)
                  status_flag=0;
                  Lcd_Cmd(_LCD_CLEAR);
                  }
-                Lcd_Out(1,16,"msg:0");
+                Lcd_Out(1,16,"MSG:0");
                 memset(Mobile_no, 0, 14);
-
-                memset(message_received, 0, 60);
+                memset(message_received, 0, 80);     //sao chép ký tu
                 while( dat[4] != 255 );
                 {
                 dat[4]=0;
                  }
+        }
     }
 
 }
-void temp(){
 
-             if (AM2302_Read(&humidity, &temperature) == 0)
-                  processValue(humidity, temperature);
-             else {
 
-                  Lcd_out(1,1,"Sensor1 NC   ");
-                  Lcd_out(2,1,"             ");
-                }
-
-}
 void re_485() {
    cm=dat[2];
    value=(dat[0]*10)+dat[1];
    if(cm==1)
    {
-   Lcd_out(3,1,"Temp2: ");
-   txt4[0]=(value/100)%10+48;
-   txt4[1]=(value/10)%10+48;
-   txt4[3]=(value%10)+48;
-   lcd_out(3,8,txt4);
-   Lcd_Out_CP(" C");
-   }
-   if(cm==2)
-   {
-   Lcd_out(4,1,"HUMI2: ");
+   value_t=dat[0];
+   EEPROM_Write(0x11,value_t);
+   Lcd_out(4,1,"Temp2: ");
    txt1[0]=(value/100)%10+48;
    txt1[1]=(value/10)%10+48;
    txt1[3]=(value%10)+48;
    lcd_out(4,8,txt1);
+   Lcd_Out_CP(" C");
+   }
+   delay_ms(100);
+   if(cm==2)
+   {
+   value_h=dat[0];
+   EEPROM_Write(0x10,value_h);
+   Lcd_out(3,1,"HUMI2: ");
+   txt2[0]=(value/100)%10+48;
+   txt2[1]=(value/10)%10+48;
+   txt2[3]=(value%10)+48;
+   lcd_out(3,8,txt2);
    Lcd_Out_CP(" %");
    }
 }
@@ -237,7 +367,9 @@ void Interrupt()
     }
 
      if (TMR1IF_bit){
-    cnt++;
+    cnt1++;   //hien thi
+    cnt2++;   // lap lai canh bao
+  //  cnt3++;
     TMR1IF_bit = 0;
     TMR1H         = 0x3C;
     TMR1L         = 0xB0;
@@ -246,8 +378,35 @@ void Interrupt()
 }
 ////////////////////////////////////////////SIM800/////////////////////////////
 void checksms(){
-
-    if(strstr( message_received,"Call me")){
+ strcpy(str_val,strtok(message_received, "#")); //take the first value
+    M3 = str_val;
+    strcpy(str_val,strtok(0, "#")); //take the secound value
+    M1 = atoi(str_val); //convert string to INT
+    strcpy(str_val,strtok(0, "#")); //take the third value
+    M2 = atoi(str_val); //convert string to INT
+    if(strstr( message_received,"SETTEMP")){
+    Lcd_Cmd(_LCD_CLEAR);
+    Lcd_Out(1,1,"SETING TEMP");
+    EEPROM_Write(0x01,M1);  //nhiet do thap
+    EEPROM_Write(0x00,M2);   //nhiet do cao
+    Send_Status1();
+    Delay_ms(500);
+}
+    if(strstr( message_received,"SETHUMI")){
+    Lcd_Cmd(_LCD_CLEAR);
+    Lcd_Out(1,1,"SETING HUMI");
+    EEPROM_Write(0x03,M1); //do am thap
+    EEPROM_Write(0x02,M2); //do am cao
+    Send_Status1();
+    Delay_ms(500);
+}
+    if(strstr( message_received,"SETTING?")){
+    Lcd_Cmd(_LCD_CLEAR);
+    Lcd_Out(1,1,"SETING?");
+    Send_Status1();
+    Delay_ms(500);
+}
+    if(strstr( message_received,"CALL")){
     GSM_Calling(Mobile_no1);
     Lcd_Cmd(_LCD_CLEAR);
     Lcd_Out(1,1,"Calling...");
@@ -261,6 +420,20 @@ void checksms(){
     Lcd_Cmd(_LCD_CLEAR);
     Lcd_Out(1,1,"Send infor");
     Send_Status();
+    Delay_ms(500);
+}
+ else if(strstr(message_received,"ALARM ON")){
+    Alarm1=1;
+    Lcd_Cmd(_LCD_CLEAR);
+    Lcd_Out(1,1,"ALARM ON");
+  //  Send_Status();
+    Delay_ms(500);
+}
+ else if(strstr(message_received,"ALARM OFF")){
+    Alarm1=0;
+    Lcd_Cmd(_LCD_CLEAR);
+    Lcd_Out(1,1,"ALARM OFF");
+   // Send_Status();
     Delay_ms(500);
 }
     else if(strstr(message_received,"TB1ON")){
@@ -284,7 +457,7 @@ void checksms(){
    Send_Status();
    Delay_ms(500);
   }
-   else if(strstr(message_received,"R2 off")){
+   else if(strstr(message_received,"TB2OFF")){
    Relay2=0;
    Lcd_Cmd(_LCD_CLEAR);
    Lcd_Out(1,1,"TB2 OFF");
@@ -298,7 +471,11 @@ unsigned ComposeMessage(char* Message){
   Message[0] = '\0';
   strcat(Message, "INFO:");
   strcat(Message, "\r\n");
-
+  if (Alarm1==1)  // Digital_IN1
+  { strcat(Message, " AL - ON"); }
+  else
+  { strcat(Message, " AL - OFF"); }
+  strcat(Message, "\r\n");
   if (Relay1)
   { strcat(Message, " TB1 - ON");  }
   else
@@ -311,31 +488,28 @@ unsigned ComposeMessage(char* Message){
   { strcat(Message, " TB2 - OFF"); }
   strcat(Message, "\r\n");
 
-  if (Button(&PORTA, 2, 1, 1))  // Digital_IN1
-  { strcat(Message, "IN1 - OFF"); }
+  if (Button(&PORTA, 3, 100, 1))  // Digital_IN1
+  { strcat(Message, " IN1 - OPEN"); }
   else
-  { strcat(Message, "IN1 - ON"); }
+  { strcat(Message, " IN1 - CLOSE"); }
   strcat(Message, "\r\n");
-  if (Button(&PORTA, 3, 1, 1))  // Digital_IN2
-  { strcat(Message, "IN1 - OFF"); }
+  if (Button(&PORTA, 2, 100, 1))  // Digital_IN2
+  { strcat(Message, " IN2 - CLOSE"); }
   else
-  { strcat(Message, " IN2 - ON"); }
+  { strcat(Message, " IN2 - OPEN"); }
   strcat(Message, "\r\n");
 
     if (AM2302_Read(&humidity, &temperature) == 0)
   {
   processValue(humidity, temperature);
-  txt2[0]= temperature/100 +48;
-  txt2[1]= (temperature/10)%10 +48;
-  //txt[2]= '.';
-  txt2[3]= temperature%10 +48;
+
   strcat(Message, " TEMP 1: ");
-  strcat(Message, txt2);    // Add Humidity data
+  strcat(Message, txt3);    // Add Humidity data
   strcat(Message, " C");
   strcat(Message, "\r\n");
 
   strcat(Message, " HUMI 1: ");
-  strcat(Message, txt3);    // Add Humidity data
+  strcat(Message, txt4);    // Add Humidity data
   strcat(Message, " %");
   strcat(Message, "\r\n");
    }
@@ -345,11 +519,11 @@ unsigned ComposeMessage(char* Message){
    strcat(Message, "\r\n");
   }
   strcat(Message, " TEMP 1: ");
-  strcat(Message, txt4);    // Add Humidity data
+  strcat(Message, txt1);    // Add Humidity data
   strcat(Message, " C");
   strcat(Message, "\r\n");
   strcat(Message, " HUMI 2: ");
-  strcat(Message, txt1);    // Add Humidity data
+  strcat(Message, txt2);    // Add Humidity data
   strcat(Message, " %");
   strcat(Message, "\r\n");
   strcat(Message, "End.");
@@ -357,8 +531,137 @@ unsigned ComposeMessage(char* Message){
   return strlen(Message);
 }
 
+unsigned settingMessage(char* Message1){
+  char txt[3];
+  Message1[0] = '\0';
+  strcat(Message1, "SETTING:");
+  strcat(Message1, "\r\n");
+
+  strcat(Message1, " Temp_H:");
+  t2=EEPROM_Read(0x00);
+  ShortToStr(t2,txt);
+  strcat(Message1, txt);
+  strcat(Message1, " C");
+  strcat(Message1, "\r\n");
+
+  strcat(Message1, " Temp_L:");
+  t3=EEPROM_Read(0x01);
+  ShortToStr(t3,txt);
+  strcat(Message1, txt);
+  strcat(Message1, " C");
+  strcat(Message1, "\r\n");
+
+  strcat(Message1, " Humi_H:");
+  h2=EEPROM_Read(0x02);
+  ShortToStr(h2,txt);
+  strcat(Message1, txt);
+  strcat(Message1, " %");
+  strcat(Message1, "\r\n");
+
+  strcat(Message1, " Humi_L:");
+  h3=EEPROM_Read(0x03);
+  ShortToStr(h3,txt);
+  strcat(Message1, txt);
+  strcat(Message1, " %");
+  strcat(Message1, "\r\n");
+
+  strcat(Message1, "End.");
+  strcat(Message1, "\r\n");
+  return strlen(Message1);
+}
+
+unsigned AlarmMessage(char* Message2){
+   char txt1[3],txt2[3],txt3[3],txt4[3];
+   Message2[0] = '\0';
+  strcat(Message2, "Alarm:");
+  strcat(Message2, "\r\n");
+  
+  if(EEPROM_Read(0x11)>=EEPROM_Read(0x00)){
+  strcat(Message2, " Temp: ");
+  ShortToStr(EEPROM_Read(0x11),txt1);
+  strcat(Message2, txt1);
+  strcat(Message2, " C");
+  strcat(Message2,">= Temp_H: ");
+  ShortToStr(EEPROM_Read(0x00),txt2);
+  strcat(Message2, txt2);
+  strcat(Message2, " C");
+  strcat(Message2, "\r\n");
+  }
+  if(EEPROM_Read(0x11)<=EEPROM_Read(0x01)){
+  strcat(Message2, " Temp: ");
+  ShortToStr(EEPROM_Read(0x11),txt1);
+  strcat(Message2, txt1);
+  strcat(Message2, " C");
+  strcat(Message2,"<= Temp_L: ");
+  ShortToStr(EEPROM_Read(0x01),txt2);
+  strcat(Message2, txt2);
+  strcat(Message2, " C");
+  strcat(Message2, "\r\n");
+  }
+  if(EEPROM_Read(0x10)>=EEPROM_Read(0x02)){
+  strcat(Message2, " Humi: ");
+  ShortToStr(EEPROM_Read(0x10),txt3);
+  strcat(Message2, txt3);
+  strcat(Message2, " %");
+  strcat(Message2,">= Humi_H: ");
+  ShortToStr(EEPROM_Read(0x02),txt4);
+  strcat(Message2, txt4);
+  strcat(Message2, " %");
+  strcat(Message2, "\r\n");
+  }
+  if(EEPROM_Read(0x10)<=EEPROM_Read(0x03)){
+  strcat(Message2, " Humi: ");
+  ShortToStr(EEPROM_Read(0x10),txt3);
+  strcat(Message2, txt3);
+  strcat(Message2, " %");
+  strcat(Message2,"<= Humi_L: ");
+  ShortToStr(EEPROM_Read(0x03),txt4);
+  strcat(Message2, txt4);
+  strcat(Message2, " %");
+  strcat(Message2, "\r\n");
+  }
+  strcat(Message2, "End.");
+  strcat(Message2, "\r\n");
+  return strlen(Message2);
+}
+unsigned Al_Message(char* Message3){
+  strcat(Message3, "Status_INPUT:");
+  strcat(Message3, "\r\n");
+  Message3[0] = '\0';
+  if (Button(&PORTA, 3, 100, 1))  // Digital_IN1
+  { strcat(Message3, " IN1 - OPEN"); }
+  else
+  { strcat(Message3, " IN1 - CLOSE"); }
+  strcat(Message3, "\r\n");
+  if (Button(&PORTA, 2, 100, 1))  // Digital_IN2
+  { strcat(Message3, " IN2 - CLOSE"); }
+  else
+  { strcat(Message3, " IN2 - OPEN"); }
+  strcat(Message3, "\r\n");
+  
+  strcat(Message3, "End.");
+  strcat(Message3, "\r\n");
+  return strlen(Message3);
+}
+
 void Send_Status(){
  ComposeMessage(sms);
+ GSM_Send_Msg(Mobile_no1,sms);
+}
+
+void Send_Status1(){
+ settingMessage(sms);
+ GSM_Send_Msg(Mobile_no1,sms);
+ cnt2=0;
+}
+void Send_Status2(){
+ Relay1=1;
+ AlarmMessage(sms);
+ GSM_Send_Msg(Mobile_no1,sms);
+ cnt2=0;
+}
+void Send_Status3(){
+ Al_Message(sms);
  GSM_Send_Msg(Mobile_no1,sms);
 }
 
@@ -713,27 +1016,103 @@ char AM2302_Read(unsigned *humidity, unsigned *temperature) {
 
 
 void processValue(unsigned humidity, unsigned temperature) {
-  if(humidity>=1000)  Lcd_Chr(2,7,(humidity/1000) +48);
-  else  Lcd_Out(2,7," ");
-  txt3[0]= humidity/100%10 +48;
-  txt3[1]= (humidity/10)%10 +48;
-  txt3[3]= humidity%10 +48;
-  Lcd_Out(2,1,"HUMI1:");
-  Lcd_Out(2,8,txt3);
-  Lcd_Chr(2,13,0x25);
-
-  if(temperature&0x8000) Lcd_Out(1,7,"-");
+  if(humidity>=1000)  Lcd_Chr(1,7,(humidity/1000) +48);
   else  Lcd_Out(1,7," ");
+  txt4[0]= humidity/100%10 +48;
+  txt4[1]= (humidity/10)%10 +48;
+  txt4[3]= humidity%10 +48;
+  Lcd_Out(1,1,"HUMI1:");
+  Lcd_Out(1,8,txt4);
+  Lcd_Chr(1,13,0x25);
+
+  if(temperature&0x8000) Lcd_Out(2,7,"-");
+  else  Lcd_Out(2,7," ");
   temperature&=0x7FFF;
-  txt2[0]= temperature/100 +48;
-  txt2[1]= (temperature/10)%10 +48;
-  txt2[3]= temperature%10 +48;
-  Lcd_Out(1,1,"TEMP1:");
-  Lcd_Out(1,8,txt2);
+  txt3[0]= temperature/100 +48;
+  txt3[1]= (temperature/10)%10 +48;
+  txt3[3]= temperature%10 +48;
+  Lcd_Out(2,1,"TEMP1:");
+  Lcd_Out(2,8,txt3);
   Lcd_Out_CP(" C");
 }
 
+void status_lcd()
+{
+      /////////////// lcd=1////////////////////////
+if(lcd==1){
+  if (Button(&PORTB, 0, 100, 0)) {               // Detect logical one
 
+     temp_hh++;
+     if(temp_hh==temp_h)
+     {
+      temp_hh=0;
+     }
+     EEPROM_Write(0x00,temp_hh);
+
+    }
+    if (Button(&PORTB, 1, 100, 0)) {               // Detect logical one
+     temp_ll--;
+     if(temp_ll==temp_l)
+     {
+      temp_ll=50;
+     }
+     EEPROM_Write(0x01,temp_ll);
+    }
+  temp_hh=EEPROM_Read(0x00);
+  ShortToStr(temp_hh,str1);
+  temp_ll=EEPROM_Read(0x01);
+  ShortToStr(temp_ll,str2);
+  Lcd_Out(1,1,"TEMP HH:");
+  Lcd_Out(2,1,"TEMP LL:");
+  Lcd_Out(1,9,str1);
+  Lcd_Out(2,9,str2);
+  }
+    /////////////// lcd=2////////////////////////
+  if(lcd==2){
+  if (Button(&PORTB, 0, 100, 0)) {               // Detect logical one
+
+     humi_hh++;
+     if(humi_hh==humi_h)
+     {
+      humi_hh=100;
+     }
+     EEPROM_Write(0x02,humi_hh);
+
+    }
+    if (Button(&PORTB, 1, 100, 0)) {               // Detect logical one
+     humi_ll--;
+     if(humi_ll==humi_l)
+     {
+      humi_ll=100;
+     }
+     EEPROM_Write(0x03,humi_ll);
+    }
+  humi_hh=EEPROM_Read(0x02);
+  ShortToStr(humi_hh,str3);
+  humi_ll=EEPROM_Read(0x03);
+  ShortToStr(humi_ll,str4);
+  Lcd_Out(1,1,"HUMI HH:");
+  Lcd_Out(2,1,"HUMI LL:");
+  Lcd_Out(1,9,str3);
+  Lcd_Out(2,9,str4);
+  }
+  ///////////////xet trang thai lcd////////////////////////
+    if (Button(&PORTC, 5, 150, 0) && lcd==0) {               // Detect logical one
+       Lcd_Cmd(_LCD_CLEAR);
+       Lcd_Cmd(_LCD_CURSOR_OFF);
+       lcd=1;
+    }
+    if (Button(&PORTC, 5, 150, 0) && lcd==1) {               // Detect logical one
+      Lcd_Cmd(_LCD_CLEAR);
+      Lcd_Cmd(_LCD_CURSOR_OFF);
+      lcd=2;
+    }
+    if (Button(&PORTC, 5, 150, 0) && lcd==2) {               // Detect logical one
+      Lcd_Cmd(_LCD_CLEAR);
+      Lcd_Cmd(_LCD_CURSOR_OFF);
+      lcd=0;
+    }
+ }
 void Display_Init(){
   LCD_Init();
   LCD_Cmd(_LCD_CLEAR);
