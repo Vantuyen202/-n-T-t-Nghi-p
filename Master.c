@@ -176,7 +176,6 @@ void main(void)
     Lcd_Cmd(_LCD_CURSOR_OFF);
     Delay_ms(2000); // doi khoi dong module sim
     GSM_Begin();
-    Send_Status();
     Lcd_Cmd(_LCD_CLEAR);
     while(1)
     {
